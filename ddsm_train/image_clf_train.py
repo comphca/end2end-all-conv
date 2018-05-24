@@ -11,8 +11,8 @@ from dm_keras_ext import (
 from dm_resnet import add_top_layers, bottleneck_org
 from dm_multi_gpu import make_parallel
 import warnings
-import exceptions
-warnings.filterwarnings('ignore', category=exceptions.UserWarning)
+#import exceptions
+#warnings.filterwarnings('ignore', category=exceptions.UserWarning)
 
 
 def run(train_dir, val_dir, test_dir, patch_model_state=None, resume_from=None,
@@ -95,24 +95,25 @@ def run(train_dir, val_dir, test_dir, patch_model_state=None, resume_from=None,
         dup_3_channels = False
     if load_train_ram:
         raw_imgen = DMImageDataGenerator()
-        print "Create generator for raw train set"
+        print ("Create generator for raw train set")
         raw_generator = raw_imgen.flow_from_directory(
             train_dir, target_size=img_size, target_scale=img_scale, 
             rescale_factor=rescale_factor,
             equalize_hist=equalize_hist, dup_3_channels=dup_3_channels,
             classes=class_list, class_mode='categorical', 
             batch_size=train_bs, shuffle=False)
-        print "Loading raw train set into RAM.",
+        print ("Loading raw train set into RAM.",)
         sys.stdout.flush()
         raw_set = load_dat_ram(raw_generator, raw_generator.nb_sample)
-        print "Done."; sys.stdout.flush()
-        print "Create generator for train set"
+        print ("Done.")
+        sys.stdout.flush()
+        print ("Create generator for train set")
         train_generator = train_imgen.flow(
             raw_set[0], raw_set[1], batch_size=train_bs, 
             auto_batch_balance=auto_batch_balance, 
             shuffle=True, seed=random_seed)
     else:
-        print "Create generator for train set"
+        print ("Create generator for train set")
         train_generator = train_imgen.flow_from_directory(
             train_dir, target_size=img_size, target_scale=img_scale,
             rescale_factor=rescale_factor,
@@ -121,7 +122,7 @@ def run(train_dir, val_dir, test_dir, patch_model_state=None, resume_from=None,
             auto_batch_balance=auto_batch_balance, batch_size=train_bs, 
             shuffle=True, seed=random_seed)
 
-    print "Create generator for val set"
+    print ("Create generator for val set")
     validation_set = val_imgen.flow_from_directory(
         val_dir, target_size=img_size, target_scale=img_scale,
         rescale_factor=rescale_factor,
@@ -130,10 +131,11 @@ def run(train_dir, val_dir, test_dir, patch_model_state=None, resume_from=None,
         batch_size=batch_size, shuffle=False)
     sys.stdout.flush()
     if load_val_ram:
-        print "Loading validation set into RAM.",
+        print ("Loading validation set into RAM.",)
         sys.stdout.flush()
         validation_set = load_dat_ram(validation_set, validation_set.nb_sample)
-        print "Done."; sys.stdout.flush()
+        print ("Done.")
+        sys.stdout.flush()
 
     # ==================== Model training ==================== #
     # Do 2-stage training.
@@ -173,16 +175,16 @@ def run(train_dir, val_dir, test_dir, patch_model_state=None, resume_from=None,
         min_loss_locs, = np.where(loss_hist == min(loss_hist))
         best_val_loss = loss_hist[min_loss_locs[0]]
         best_val_accuracy = acc_hist[min_loss_locs[0]]
-        print "\n==== Training summary ===="
-        print "Minimum val loss achieved at epoch:", min_loss_locs[0] + 1
-        print "Best val loss:", best_val_loss
-        print "Best val accuracy:", best_val_accuracy
+        print ("\n==== Training summary ====")
+        print ("Minimum val loss achieved at epoch:", min_loss_locs[0] + 1)
+        print ("Best val loss:", best_val_loss)
+        print ("Best val accuracy:", best_val_accuracy)
 
     if final_model != "NOSAVE":
         image_model.save(final_model)
 
     # ==== Predict on test set ==== #
-    print "\n==== Predicting on test set ===="
+    print ("\n==== Predicting on test set ====")
     test_generator = test_imgen.flow_from_directory(
         test_dir, target_size=img_size, target_scale=img_scale,
         rescale_factor=rescale_factor,
@@ -193,18 +195,18 @@ def run(train_dir, val_dir, test_dir, patch_model_state=None, resume_from=None,
     #### DEBUG ####
     # test_samples = 5
     #### DEBUG ####
-    print "Test samples =", test_samples
-    print "Load saved best model:", best_model + '.',
+    print ("Test samples =", test_samples)
+    print ("Load saved best model:", best_model + '.',)
     sys.stdout.flush()
     org_model.load_weights(best_model)
-    print "Done."
+    print ("Done.")
     # test_steps = int(test_generator.nb_sample/batch_size)
     # test_res = image_model.evaluate_generator(
     #     test_generator, test_steps, nb_worker=nb_worker, 
     #     pickle_safe=True if nb_worker > 1 else False)
     test_auc = DMAucModelCheckpoint.calc_test_auc(
         test_generator, image_model, test_samples=test_samples)
-    print "AUROC on test set:", test_auc
+    print ("AUROC on test set:", test_auc)
 
 
 if __name__ == '__main__':
@@ -335,10 +337,10 @@ if __name__ == '__main__':
         best_model=args.best_model,        
         final_model=args.final_model        
     )
-    print "\ntrain_dir=%s" % (args.train_dir)
-    print "val_dir=%s" % (args.val_dir)
-    print "test_dir=%s" % (args.test_dir)
-    print "\n>>> Model training options: <<<\n", run_opts, "\n"
+    print ("\ntrain_dir=%s" % (args.train_dir))
+    print ("val_dir=%s" % (args.val_dir))
+    print ("test_dir=%s" % (args.test_dir))
+    print ("\n>>> Model training options: <<<\n", run_opts, "\n")
     run(args.train_dir, args.val_dir, args.test_dir, **run_opts)
 
 

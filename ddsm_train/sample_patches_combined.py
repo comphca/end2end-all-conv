@@ -100,11 +100,12 @@ def sample_patches(img, roi_mask, out_dir, img_id, abn, pos, patch_size=256,
         try:
             cx = int(M['m10']/M['m00'])
             cy = int(M['m01']/M['m00'])
-            print "ROI centroid=", (cx,cy); sys.stdout.flush()
+            print ("ROI centroid=", (cx,cy))
+            sys.stdout.flush()
         except ZeroDivisionError:
             cx = rx + int(rw/2)
             cy = ry + int(rh/2)
-            print "ROI centroid=Unknown, use b-box center=", (cx,cy)
+            print ("ROI centroid=Unknown, use b-box center=", (cx,cy))
             sys.stdout.flush()
 
     rng = np.random.RandomState(12345)
@@ -117,7 +118,7 @@ def sample_patches(img, roi_mask, out_dir, img_id, abn, pos, patch_size=256,
             y = rng.randint(ry, ry + rh)
             nb_try += 1
             if nb_try >= 1000:
-                print "Nb of trials reached maximum, decrease overlap cutoff by 0.05"
+                print ("Nb of trials reached maximum, decrease overlap cutoff by 0.05")
                 sys.stdout.flush()
                 pos_cutoff -= .05
                 nb_try = 0
@@ -143,7 +144,7 @@ def sample_patches(img, roi_mask, out_dir, img_id, abn, pos, patch_size=256,
             sampled_abn += 1
             nb_try = 0
             if verbose:
-                print "sampled an abn patch at (x,y) center=", (x,y)
+                print ("sampled an abn patch at (x,y) center=", (x,y))
                 sys.stdout.flush()
     # Sample background.
     sampled_bkg = start_sample_nb
@@ -161,7 +162,7 @@ def sample_patches(img, roi_mask, out_dir, img_id, abn, pos, patch_size=256,
             patch_img.save(fullname)
             sampled_bkg += 1
             if verbose:
-                print "sampled a bkg patch at (x,y) center=", (x,y)
+                print ("sampled a bkg patch at (x,y) center=", (x,y))
                 sys.stdout.flush()
 
 def sample_hard_negatives(img, roi_mask, out_dir, img_id, abn,  
@@ -193,7 +194,8 @@ def sample_hard_negatives(img, roi_mask, out_dir, img_id, abn,
         M = cv2.moments(contours[idx])
         cx = int(M['m10']/M['m00'])
         cy = int(M['m01']/M['m00'])
-        print "ROI centroid=", (cx,cy); sys.stdout.flush()
+        print ("ROI centroid=", (cx,cy))
+        sys.stdout.flush()
 
     rng = np.random.RandomState(12345)
     # Sample hard negative samples.
@@ -218,7 +220,7 @@ def sample_hard_negatives(img, roi_mask, out_dir, img_id, abn,
             patch_img.save(fullname)
             sampled_bkg += 1
             if verbose:
-                print "sampled a hns patch at (x,y) center=", (x,y)
+                print ("sampled a hns patch at (x,y) center=", (x,y))
                 sys.stdout.flush()
 
 def sample_blob_negatives(img, roi_mask, out_dir, img_id, abn, blob_detector, 
@@ -246,7 +248,8 @@ def sample_blob_negatives(img, roi_mask, out_dir, img_id, abn, blob_detector,
         M = cv2.moments(contours[idx])
         cx = int(M['m10']/M['m00'])
         cy = int(M['m01']/M['m00'])
-        print "ROI centroid=", (cx,cy); sys.stdout.flush()
+        print ("ROI centroid=", (cx,cy))
+        sys.stdout.flush()
 
     # Sample blob negative samples.
     key_pts = blob_detector.detect((img/img.max()*255).astype('uint8'))
@@ -267,7 +270,7 @@ def sample_blob_negatives(img, roi_mask, out_dir, img_id, abn, blob_detector,
             fullname = os.path.join(bkg_out, filename)
             patch_img.save(fullname)
             if verbose:
-                print "sampled a blob patch at (x,y) center=", (x,y)
+                print ("sampled a blob patch at (x,y) center=", (x,y))
                 sys.stdout.flush()
             sampled_bkg += 1
     return sampled_bkg
@@ -285,13 +288,13 @@ def run(roi_mask_path_file, roi_mask_dir, pat_train_list_file, full_img_dir,
         mass_pos_dir='mass_mal', mass_neg_dir='mass_ben', verbose=True):
 
     # Print info for book-keeping.
-    print "Pathology file=", roi_mask_path_file
-    print "ROI mask dir=", roi_mask_dir
-    print "Patient train list=", pat_train_list_file
-    print "Full image dir=", full_img_dir
-    print "Train out dir=", train_out_dir
-    print "Val out dir=", val_out_dir
-    print "==="
+    print ("Pathology file=", roi_mask_path_file)
+    print ("ROI mask dir=", roi_mask_dir)
+    print ("Patient train list=", pat_train_list_file)
+    print ("Full image dir=", full_img_dir)
+    print ("Train out dir=", train_out_dir)
+    print ("Val out dir=", val_out_dir)
+    print ("===")
     sys.stdout.flush()
 
     # Read ROI mask table with pathology.
@@ -355,10 +358,10 @@ def run(roi_mask_path_file, roi_mask_dir, pat_train_list_file, full_img_dir,
                     full_img = read_resize_img(
                         full_fn, target_size=(target_height, target_width))
                 img_id = '_'.join([pat, side, view])
-                print "ID:%s, read image of size=%s" % (img_id, full_img.shape),
+                print ("ID:%s, read image of size=%s" % (img_id, full_img.shape),)
                 if segment_breast:
                     full_img, bbox = imprep.segment_breast(full_img)
-                    print "size after segmentation=%s" % (str(full_img.shape))
+                    print ("size after segmentation=%s" % (str(full_img.shape)))
                 sys.stdout.flush()
                 # Read mask image(s).
                 abn_path = roi_mask_path_df.loc[pat].loc[side].loc[view]
@@ -400,21 +403,21 @@ def run(roi_mask_path_file, roi_mask_dir, pat_train_list_file, full_img_dir,
                                    mass_pos_dir, mass_neg_dir, verbose)
                     bkg_sampled = True
             except AttributeError:
-                print "Read image error: %s" % (full_fn)
+                print ("Read image error: %s" % (full_fn))
             except ValueError:
-                print "Error sampling from ROI mask image: %s" % (mask_fn)
+                print ("Error sampling from ROI mask image: %s" % (mask_fn))
 
     #####
-    print "Sampling for train set"
+    print ("Sampling for train set")
     sys.stdout.flush()
     do_sampling(train_df, train_out_dir)
-    print "Done."
+    print ("Done.")
     #####
     if val_size > 0.:
-        print "Sampling for val set"
+        print ("Sampling for val set")
         sys.stdout.flush()
         do_sampling(val_df, val_out_dir)
-        print "Done."
+        print ("Done.")
 
 
 if __name__ == '__main__':
@@ -467,7 +470,7 @@ if __name__ == '__main__':
         mass_neg_dir=args.mass_neg_dir,
         verbose=args.verbose
     )
-    print "\n>>> Model training options: <<<\n", run_opts, "\n"
+    print ("\n>>> Model training options: <<<\n", run_opts, "\n")
     run(args.roi_mask_path_file, args.roi_mask_dir, args.pat_train_list_file,
         args.full_img_dir, args.train_out_dir, args.val_out_dir, **run_opts)
 

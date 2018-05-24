@@ -16,8 +16,8 @@ from dm_multi_gpu import make_parallel
 from dm_resnet import add_top_layers
 import keras.backend as K
 data_format = K.image_data_format()
-import warnings, exceptions
-warnings.filterwarnings('ignore', category=exceptions.UserWarning)
+#import warnings
+#warnings.filterwarnings('ignore', category=exceptions.UserWarning)
 
 
 def run(img_folder, dl_state, fprop_mode=False,
@@ -46,18 +46,19 @@ def run(img_folder, dl_state, fprop_mode=False,
     if pat_list is not None:
         pat_ids = pd.read_csv(pat_list, header=0).values.ravel()
         pat_ids = pat_ids.tolist()
-        print "Read %d patient IDs" % (len(pat_ids))
+        print ("Read %d patient IDs" % (len(pat_ids)))
         df = df.loc[pat_ids]
 
     # Load DL model, preprocess.
-    print "Load patch classifier:", dl_state; sys.stdout.flush()
+    print ("Load patch classifier:", dl_state)
+    sys.stdout.flush()
     dl_model, preprocess_input, _ = get_dl_model(net, resume_from=dl_state)
     if fprop_mode:
         dl_model = add_top_layers(dl_model, img_size, patch_net=net, 
                                   avg_pool_size=avg_pool_size, 
                                   return_heatmap=True, hm_strides=hm_strides)
     if gpu_count > 1:
-        print "Make the model parallel on %d GPUs" % (gpu_count)
+        print ("Make the model parallel on %d GPUs" % (gpu_count))
         sys.stdout.flush()
         dl_model, _ = make_parallel(dl_model, gpu_count)
         parallelized = True
@@ -71,7 +72,8 @@ def run(img_folder, dl_state, fprop_mode=False,
         basename = '_'.join([pat, side, view]) + '.png'
         return os.path.join(img_folder, basename)
 
-    print "Generate prob heatmaps"; sys.stdout.flush()
+    print ("Generate prob heatmaps")
+    sys.stdout.flush()
     heatmaps = []
     cases_seen = 0
     nb_cases = len(df.index.unique())
@@ -124,15 +126,15 @@ def run(img_folder, dl_state, fprop_mode=False,
             mlo_hm = None
         heatmaps.append({'patient_id':pat, 'side':side, 'cancer':cancer, 
                          'cc':cc_hm, 'mlo':mlo_hm})
-        print "scored %d/%d cases" % (i + 1, nb_cases)
+        print ("scored %d/%d cases" % (i + 1, nb_cases))
         sys.stdout.flush()
-    print "Done."
+    print ("Done.")
 
     # Save the result.
-    print "Saving result to external files.",
+    print ("Saving result to external files.",)
     sys.stdout.flush()
     pickle.dump(heatmaps, open(out, 'w'))
-    print "Done."
+    print ("Done.")
 
 
 if __name__ == '__main__':
@@ -188,10 +190,10 @@ if __name__ == '__main__':
         pat_list=args.pat_list,
         out=args.out,
     )
-    print "\n"
-    print "img_folder=%s" % (args.img_folder)
-    print "dl_state=%s" % (args.dl_state)
-    print "\n>>> Model training options: <<<\n", run_opts, "\n"
+    print ("\n")
+    print ("img_folder=%s" % (args.img_folder))
+    print ("dl_state=%s" % (args.dl_state))
+    print ("\n>>> Model training options: <<<\n", run_opts, "\n")
     run(args.img_folder, args.dl_state, **run_opts)
 
 
