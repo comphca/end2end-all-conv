@@ -56,6 +56,7 @@ def _bn_relu_conv(nb_filter, nb_row, nb_col, strides=(1, 1),
                   weight_decay=.0001, dropout=.0):
     def f(input):
         norm = BatchNormalization(axis=CHANNEL_AXIS)(input)
+
         activation = Activation("relu")(norm)
         activation = Dropout(dropout)(activation)
         return Conv2D(filters=nb_filter, kernel_size=(nb_row, nb_col), 
@@ -368,7 +369,7 @@ class ResNetBuilder(object):
     @staticmethod
     def build(input_shape, num_outputs, block_fn, repetitions, nb_init_filter=64,
               init_filter_size=7, init_conv_stride=2, pool_size=3, pool_stride=2,
-              weight_decay=.0001, alpha=1., l1_ratio=.5, 
+              weight_decay=.0001, alpha=1., l1_ratio=.5,
               inp_dropout=.0, hidden_dropout=.0, shortcut_with_bn=False):
         """
         Builds a custom ResNet like architecture.

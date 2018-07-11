@@ -3,6 +3,7 @@ import numpy as np
 from os import path
 
 
+
 class DMMetaManager(object):
     '''Class for reading meta data and feeding them to training
     '''
@@ -29,15 +30,19 @@ class DMMetaManager(object):
                 return path.join(img_folder, 
                                  path.splitext(name)[0] + '.' + img_extension)
 
+            #read_csv()参数第一个是源，sep分割符为“\t”，  na_values：一组用于替换NA/NaN的值。如果传参，需要制定特定列的空值。
             img_df = pd.read_csv(img_tsv, sep="\t", na_values=['.', '*'])
             try:
+                #在img_df数据中设置subjectId和examIndex这两个索引 赋值img_df_indexed
                 img_df_indexed = img_df.set_index(['subjectId', 'examIndex'])
             except KeyError:
                 img_df_indexed = img_df.set_index(['subjectId'])
             if exam_tsv is not None:
                 exam_df = pd.read_csv(exam_tsv, sep="\t", na_values=['.', '*'])
                 exam_df_indexed = exam_df.set_index(['subjectId', 'examIndex'])
+                #加上上面img_df 的索引 全部赋值到  self.exam_img_df
                 self.exam_img_df = exam_df_indexed.join(img_df_indexed)
+                #apply数据聚合
                 self.exam_img_df['filename'] = \
                     self.exam_img_df['filename'].apply(mod_file_path)
             else:
@@ -274,7 +279,7 @@ class DMMetaManager(object):
             if nb_exam == 1:
                 yield (subj_id, 1, subj_dat.loc[1], None, None)
             else:
-                for prior_idx in xrange(1, nb_exam):
+                for prior_idx in range(1, nb_exam):
                     curr_idx = prior_idx + 1
                     yield (subj_id, curr_idx, subj_dat.loc[curr_idx], 
                            prior_idx, subj_dat.loc[prior_idx])

@@ -14,24 +14,48 @@ import warnings
 #import exceptions
 #warnings.filterwarnings('ignore', category=exceptions.UserWarning)
 
-
+'''
+    作用：训练图像分类的深度学习模型
+    输入：训练路径train_dir, 验证路径val_dir, 测试路径test_dir, 区域模型类型patch_model_state, 模型回复resume_from,
+        图片尺寸img_size, 图比例img_scale, 是否重新调整因子rescale_factor,
+        使输入数据集去中心化（均值为0）, 按feature执行featurewise_center, featurewise_mean,
+        equalize_hist, 是否增强图像augmentation,
+        分类为两种class_list, 区域使用网络patch_net,
+        块网络类型block_type, top层深度top_depths, top_repetitions,
+        瓶颈放大因子bottleneck_enlarge_factor,
+        增加热图add_heatmap, 均值池化大小avg_pool_size,
+        增加卷积add_conv, add_shortcut,
+        热图步长hm_strides, 热图池化大小hm_pool_size，
+        全连接初始化单元fc_init_units, 全连接层fc_layers,
+        top层top_layer_nb,
+        梯度批量尺寸batch_size, 批量训练乘数train_bs_multiplier,
+        迭代次数nb_epoch, 所有层迭代次数all_layer_epochs,
+        读取val内存load_val_ram, 读取训练内存load_train_ram,
+        权值衰减weight_decay, dropout隐藏比例hidden_dropout,
+        weight_decay2, hidden_dropout2,
+        优化名optim, 初始学习率init_lr, lr_patience=10, es_patience=25,
+        auto_batch_balance, 阳性权重pos_cls_weight, 阴性neg_cls_weight,
+        所有层乘数all_layer_multiplier,
+        最佳模型存储路径best_model,
+        最终模型final_model
+'''
 def run(train_dir, val_dir, test_dir, patch_model_state=None, resume_from=None,
         img_size=[1152, 896], img_scale=None, rescale_factor=None,
-        featurewise_center=True, featurewise_mean=52.16, 
+        featurewise_center=True, featurewise_mean=52.16,
         equalize_hist=False, augmentation=True,
         class_list=['neg', 'pos'], patch_net='resnet50',
-        block_type='resnet', top_depths=[512, 512], top_repetitions=[3, 3], 
-        bottleneck_enlarge_factor=4, 
-        add_heatmap=False, avg_pool_size=[7, 7], 
+        block_type='resnet', top_depths=[512, 512], top_repetitions=[3, 3],
+        bottleneck_enlarge_factor=4,
+        add_heatmap=False, avg_pool_size=[7, 7],
         add_conv=True, add_shortcut=False,
         hm_strides=(1,1), hm_pool_size=(5,5),
         fc_init_units=64, fc_layers=2,
         top_layer_nb=None,
-        batch_size=64, train_bs_multiplier=.5, 
+        batch_size=64, train_bs_multiplier=.5,
         nb_epoch=5, all_layer_epochs=20,
         load_val_ram=False, load_train_ram=False,
-        weight_decay=.0001, hidden_dropout=.0, 
-        weight_decay2=.0001, hidden_dropout2=.0, 
+        weight_decay=.0001, hidden_dropout=.0,
+        weight_decay2=.0001, hidden_dropout2=.0,
         optim='sgd', init_lr=.01, lr_patience=10, es_patience=25,
         auto_batch_balance=False, pos_cls_weight=1.0, neg_cls_weight=1.0,
         all_layer_multiplier=.1,
@@ -41,11 +65,13 @@ def run(train_dir, val_dir, test_dir, patch_model_state=None, resume_from=None,
     '''
 
     # ======= Environmental variables ======== #
+    #获取环境变量
     random_seed = int(os.getenv('RANDOM_SEED', 12345))
     nb_worker = int(os.getenv('NUM_CPU_CORES', 4))
     gpu_count = int(os.getenv('NUM_GPU_DEVICES', 1))
 
     # ========= Image generator ============== #
+    #创建图像生成
     if featurewise_center:
         train_imgen = DMImageDataGenerator(featurewise_center=True)
         val_imgen = DMImageDataGenerator(featurewise_center=True)
@@ -59,87 +85,91 @@ def run(train_dir, val_dir, test_dir, patch_model_state=None, resume_from=None,
         test_imgen = DMImageDataGenerator()
 
     # Add augmentation options.
+    #增加增强选项
     if augmentation:
-        train_imgen.horizontal_flip = True 
+        train_imgen.horizontal_flip = True
         train_imgen.vertical_flip = True
-        train_imgen.rotation_range = 25.  # in degree.
-        train_imgen.shear_range = .2  # in radians.
-        train_imgen.zoom_range = [.8, 1.2]  # in proportion.
-        train_imgen.channel_shift_range = 20.  # in pixel intensity values.
-
+        train_imgen.rotation_range = 25.  # in degree.读书
+        train_imgen.shear_range = .2  # in radians.半径
+        train_imgen.zoom_range = [.8, 1.2]  # in proportion.比例
+        train_imgen.channel_shift_range = 20.  # in pixel intensity values.像素强度
+    #创建模型
     # ================= Model creation ============== #
+    # 整图模型
     if resume_from is not None:
         image_model = load_model(resume_from, compile=False)
     else:
+        #读取patch模型，改成整图模型
         patch_model = load_model(patch_model_state, compile=False)
         image_model, top_layer_nb = add_top_layers(
-            patch_model, img_size, patch_net, block_type, 
+            patch_model, img_size, patch_net, block_type,
             top_depths, top_repetitions, bottleneck_org,
-            nb_class=len(class_list), shortcut_with_bn=True, 
+            nb_class=len(class_list), shortcut_with_bn=True,
             bottleneck_enlarge_factor=bottleneck_enlarge_factor,
             dropout=hidden_dropout, weight_decay=weight_decay,
             add_heatmap=add_heatmap, avg_pool_size=avg_pool_size,
             add_conv=add_conv, add_shortcut=add_shortcut,
-            hm_strides=hm_strides, hm_pool_size=hm_pool_size, 
+            hm_strides=hm_strides, hm_pool_size=hm_pool_size,
             fc_init_units=fc_init_units, fc_layers=fc_layers)
+    #GPU并行运行
     if gpu_count > 1:
         image_model, org_model = make_parallel(image_model, gpu_count)
     else:
         org_model = image_model
-
+    #训练，验证集
     # ============ Train & validation set =============== #
     train_bs = int(batch_size*train_bs_multiplier)
     if patch_net != 'yaroslav':
-        dup_3_channels = True
+        dup_3_channels = True#3通道图
     else:
-        dup_3_channels = False
-    if load_train_ram:
+        dup_3_channels = False#单通道
+    if load_train_ram:#把数据放入内存中
         raw_imgen = DMImageDataGenerator()
         print ("Create generator for raw train set")
+        #产生数据集
         raw_generator = raw_imgen.flow_from_directory(
-            train_dir, target_size=img_size, target_scale=img_scale, 
+            train_dir, target_size=img_size, target_scale=img_scale,
             rescale_factor=rescale_factor,
             equalize_hist=equalize_hist, dup_3_channels=dup_3_channels,
-            classes=class_list, class_mode='categorical', 
+            classes=class_list, class_mode='categorical',
             batch_size=train_bs, shuffle=False)
         print ("Loading raw train set into RAM.",)
         sys.stdout.flush()
         raw_set = load_dat_ram(raw_generator, raw_generator.nb_sample)
-        print ("Done.")
-        sys.stdout.flush()
+        print ("Done."); sys.stdout.flush()
         print ("Create generator for train set")
         train_generator = train_imgen.flow(
-            raw_set[0], raw_set[1], batch_size=train_bs, 
-            auto_batch_balance=auto_batch_balance, 
+            raw_set[0], raw_set[1], batch_size=train_bs,
+            auto_batch_balance=auto_batch_balance,
             shuffle=True, seed=random_seed)
-    else:
+    else:#数据不保存到ram
         print ("Create generator for train set")
         train_generator = train_imgen.flow_from_directory(
             train_dir, target_size=img_size, target_scale=img_scale,
             rescale_factor=rescale_factor,
             equalize_hist=equalize_hist, dup_3_channels=dup_3_channels,
-            classes=class_list, class_mode='categorical', 
-            auto_batch_balance=auto_batch_balance, batch_size=train_bs, 
+            classes=class_list, class_mode='categorical',
+            auto_batch_balance=auto_batch_balance, batch_size=train_bs,
             shuffle=True, seed=random_seed)
-
+    #为验证集创建生成器
     print ("Create generator for val set")
     validation_set = val_imgen.flow_from_directory(
         val_dir, target_size=img_size, target_scale=img_scale,
         rescale_factor=rescale_factor,
         equalize_hist=equalize_hist, dup_3_channels=dup_3_channels,
-        classes=class_list, class_mode='categorical', 
+        classes=class_list, class_mode='categorical',
         batch_size=batch_size, shuffle=False)
     sys.stdout.flush()
     if load_val_ram:
         print ("Loading validation set into RAM.",)
         sys.stdout.flush()
         validation_set = load_dat_ram(validation_set, validation_set.nb_sample)
-        print ("Done.")
-        sys.stdout.flush()
-
+        print ("Done."); sys.stdout.flush()
+    #模型训练，这里选择2阶段训练
     # ==================== Model training ==================== #
     # Do 2-stage training.
     train_batches = int(train_generator.nb_sample/train_bs) + 1
+    #是否是元组
     if isinstance(validation_set, tuple):
         val_samples = len(validation_set[0])
     else:
@@ -151,25 +181,26 @@ def run(train_dir, val_dir, test_dir, patch_model_state=None, resume_from=None,
     # validation_steps = 5
     #### DEBUG ####
     if load_val_ram:
+        #AUC模型检查
         auc_checkpointer = DMAucModelCheckpoint(
             best_model, validation_set, batch_size=batch_size)
     else:
         auc_checkpointer = DMAucModelCheckpoint(
             best_model, validation_set, test_samples=val_samples)
-    # import pdb; pdb.set_trace()
+    # import pdb; pdb.set_trace() loss_hist 误差直方图，acc_hist 准确率直方图
     image_model, loss_hist, acc_hist = do_2stage_training(
-        image_model, org_model, train_generator, validation_set, validation_steps, 
+        image_model, org_model, train_generator, validation_set, validation_steps,
         best_model, train_batches, top_layer_nb, nb_epoch=nb_epoch,
         all_layer_epochs=all_layer_epochs,
-        optim=optim, init_lr=init_lr, 
+        optim=optim, init_lr=init_lr,
         all_layer_multiplier=all_layer_multiplier,
-        es_patience=es_patience, lr_patience=lr_patience, 
-        auto_batch_balance=auto_batch_balance, 
+        es_patience=es_patience, lr_patience=lr_patience,
+        auto_batch_balance=auto_batch_balance,
         pos_cls_weight=pos_cls_weight, neg_cls_weight=neg_cls_weight,
         nb_worker=nb_worker, auc_checkpointer=auc_checkpointer,
         weight_decay=weight_decay, hidden_dropout=hidden_dropout,
         weight_decay2=weight_decay2, hidden_dropout2=hidden_dropout2,)
-
+    #产生训练报告
     # Training report.
     if len(loss_hist) > 0:
         min_loss_locs, = np.where(loss_hist == min(loss_hist))
@@ -182,14 +213,15 @@ def run(train_dir, val_dir, test_dir, patch_model_state=None, resume_from=None,
 
     if final_model != "NOSAVE":
         image_model.save(final_model)
-
+    #在测试集进行预测
     # ==== Predict on test set ==== #
     print ("\n==== Predicting on test set ====")
+    #以文件夹路径为参数,生成经过数据提升/归一化后的数据,在一个无限循环中无限产生batch数据
     test_generator = test_imgen.flow_from_directory(
         test_dir, target_size=img_size, target_scale=img_scale,
         rescale_factor=rescale_factor,
-        equalize_hist=equalize_hist, dup_3_channels=dup_3_channels, 
-        classes=class_list, class_mode='categorical', batch_size=batch_size, 
+        equalize_hist=equalize_hist, dup_3_channels=dup_3_channels,
+        classes=class_list, class_mode='categorical', batch_size=batch_size,
         shuffle=False)
     test_samples = test_generator.nb_sample
     #### DEBUG ####
@@ -202,13 +234,13 @@ def run(train_dir, val_dir, test_dir, patch_model_state=None, resume_from=None,
     print ("Done.")
     # test_steps = int(test_generator.nb_sample/batch_size)
     # test_res = image_model.evaluate_generator(
-    #     test_generator, test_steps, nb_worker=nb_worker, 
+    #     test_generator, test_steps, nb_worker=nb_worker,
     #     pickle_safe=True if nb_worker > 1 else False)
     test_auc = DMAucModelCheckpoint.calc_test_auc(
         test_generator, image_model, test_samples=test_samples)
     print ("AUROC on test set:", test_auc)
 
-
+#命令解析
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description="DM image clf training")
@@ -236,14 +268,14 @@ if __name__ == '__main__':
     parser.add_argument("--augmentation", dest="augmentation", action="store_true")
     parser.add_argument("--no-augmentation", dest="augmentation", action="store_false")
     parser.set_defaults(augmentation=True)
-    parser.add_argument("--class-list", dest="class_list", nargs='+', type=str, 
+    parser.add_argument("--class-list", dest="class_list", nargs='+', type=str,
                         default=['neg', 'pos'])
     parser.add_argument("--patch-net", dest="patch_net", type=str, default="resnet50")
     parser.add_argument("--block-type", dest="block_type", type=str, default="resnet")
     parser.add_argument("--top-depths", dest="top_depths", nargs='+', type=int, default=[512, 512])
-    parser.add_argument("--top-repetitions", dest="top_repetitions", nargs='+', type=int, 
+    parser.add_argument("--top-repetitions", dest="top_repetitions", nargs='+', type=int,
                         default=[3, 3])
-    parser.add_argument("--bottleneck-enlarge-factor", dest="bottleneck_enlarge_factor", 
+    parser.add_argument("--bottleneck-enlarge-factor", dest="bottleneck_enlarge_factor",
                         type=int, default=4)
     parser.add_argument("--add-heatmap", dest="add_heatmap", action="store_true")
     parser.add_argument("--no-add-heatmap", dest="add_heatmap", action="store_false")
@@ -283,9 +315,9 @@ if __name__ == '__main__':
     parser.add_argument("--pos-cls-weight", dest="pos_cls_weight", type=float, default=1.0)
     parser.add_argument("--neg-cls-weight", dest="neg_cls_weight", type=float, default=1.0)
     parser.add_argument("--all-layer-multiplier", dest="all_layer_multiplier", type=float, default=.1)
-    parser.add_argument("--best-model", "-bm", dest="best_model", type=str, 
+    parser.add_argument("--best-model", "-bm", dest="best_model", type=str,
                         default="./modelState/image_clf.h5")
-    parser.add_argument("--final-model", "-fm", dest="final_model", type=str, 
+    parser.add_argument("--final-model", "-fm", dest="final_model", type=str,
                         default="NOSAVE")
 
     args = parser.parse_args()
@@ -294,13 +326,13 @@ if __name__ == '__main__':
     run_opts = dict(
         patch_model_state=args.patch_model_state,
         resume_from=args.resume_from,
-        img_size=args.img_size, 
-        img_scale=args.img_scale, 
+        img_size=args.img_size,
+        img_scale=args.img_scale,
         rescale_factor=args.rescale_factor,
         featurewise_center=args.featurewise_center,
         featurewise_mean=args.featurewise_mean,
         equalize_hist=args.equalize_hist,
-        batch_size=args.batch_size, 
+        batch_size=args.batch_size,
         train_bs_multiplier=args.train_bs_multiplier,
         augmentation=args.augmentation,
         class_list=args.class_list,
@@ -318,7 +350,7 @@ if __name__ == '__main__':
         fc_init_units=args.fc_init_units,
         fc_layers=args.fc_layers,
         top_layer_nb=args.top_layer_nb,
-        nb_epoch=args.nb_epoch, 
+        nb_epoch=args.nb_epoch,
         all_layer_epochs=args.all_layer_epochs,
         load_val_ram=args.load_val_ram,
         load_train_ram=args.load_train_ram,
@@ -328,14 +360,14 @@ if __name__ == '__main__':
         hidden_dropout2=args.hidden_dropout2,
         optim=args.optim,
         init_lr=args.init_lr,
-        lr_patience=args.lr_patience, 
+        lr_patience=args.lr_patience,
         es_patience=args.es_patience,
         auto_batch_balance=args.auto_batch_balance,
         pos_cls_weight=args.pos_cls_weight,
         neg_cls_weight=args.neg_cls_weight,
         all_layer_multiplier=args.all_layer_multiplier,
-        best_model=args.best_model,        
-        final_model=args.final_model        
+        best_model=args.best_model,
+        final_model=args.final_model
     )
     print ("\ntrain_dir=%s" % (args.train_dir))
     print ("val_dir=%s" % (args.val_dir))

@@ -9,6 +9,8 @@ from scipy.misc import toimage
 from sklearn.model_selection import train_test_split
 
 #### Define some functions to use ####
+#获取列表，包括病人，左右，拍摄角度
+#对目录内的图片进行钙化或者肿块的命名
 def const_filename(pat, side, view, directory, itype='Mass', abn=None):
     token_list = [itype + "-Training", pat, side, view]
     if abn is not None:
@@ -16,29 +18,52 @@ def const_filename(pat, side, view, directory, itype='Mass', abn=None):
     fn = "_".join(token_list) + ".png"
     return os.path.join(directory, fn)
 
+'''
+    作用：将值截取至minv到maxv之间
+    输入：需要判断的值，最小截取值，最大截取值
+    输出（返回）：原值
+'''
 def crop_val(v, minv, maxv):
     v = v if v >= minv else minv
     v = v if v <= maxv else maxv
     return v
-
-def overlap_patch_roi(patch_center, patch_size, roi_mask, 
+'''
+    作用：重叠区域的判断？
+    输入：块中心（包含x，y坐标），块大小，感兴趣区域掩码，roi_patch_added加的值，截止值
+    输出（返回）：后面说明
+'''
+def overlap_patch_roi(patch_center, patch_size, roi_mask,
                       add_val=1000, cutoff=.5):
-    x1,y1 = (patch_center[0] - patch_size/2, 
+    # 取图像块的左下和右上坐标，定位图片
+    x1,y1 = (patch_center[0] - patch_size/2,
              patch_center[1] - patch_size/2)
-    x2,y2 = (patch_center[0] + patch_size/2, 
+    x2,y2 = (patch_center[0] + patch_size/2,
              patch_center[1] + patch_size/2)
+    # 截取x1，y1到0至掩码列行数最大值之间，及裁剪图像至掩码大小
+    # shape[0]读取行数，shape[1]读取列数
     x1 = crop_val(x1, 0, roi_mask.shape[1])
     y1 = crop_val(y1, 0, roi_mask.shape[0])
     x2 = crop_val(x2, 0, roi_mask.shape[1])
     y2 = crop_val(y2, 0, roi_mask.shape[0])
+    # 满足roi_mask>0的值的个数赋值给roi_area
     roi_area = (roi_mask>0).sum()
+    # 将掩码复制到roi_patch_added
     roi_patch_added = roi_mask.copy()
+    # roi_patch_added中y1到y2行,x1到x2列都加此值
     roi_patch_added[y1:y2, x1:x2] += add_val
+    # 满足roi_patch_added>=add_val的值的个数赋值给patch_area
     patch_area = (roi_patch_added>=add_val).sum()
+    # 满足roi_patch_added>add_val的值的个数赋值给inter_area
     inter_area = (roi_patch_added>add_val).sum().astype('float32')
+    # 如果inter_area/roi_area或者  inter_area/patch_area大于截取值则为true
     return (inter_area/roi_area > cutoff or inter_area/patch_area > cutoff)
 
-def create_blob_detector(roi_size=(128, 128), blob_min_area=3, 
+'''
+    作用：创建斑点检测器，来采集肿块，采样（最小区域面积）
+    输入：感兴趣区域大小，斑点最小面积，
+    输出（返回）：后面说明
+'''
+def create_blob_detector(roi_size=(128, 128), blob_min_area=3,
                          blob_min_int=.5, blob_max_int=.95, blob_th_step=10):
     params = cv2.SimpleBlobDetector_Params()
     params.filterByArea = True
@@ -58,15 +83,21 @@ def create_blob_detector(roi_size=(128, 128), blob_min_area=3,
     else:
         return cv2.SimpleBlobDetector_create(params)
 
-
+'''
+    作用：
+    输入：图像，感兴趣区域掩码，输出目录，图像ID，异常，阳性，块大小，
+    输出（返回）：
+'''
 def sample_patches(img, roi_mask, out_dir, img_id, abn, pos, patch_size=256,
                    pos_cutoff=.75, neg_cutoff=.35,
                    nb_bkg=100, nb_abn=100, start_sample_nb=0,
-                   bkg_dir='background', pos_dir='malignant', neg_dir='benign', 
+                   bkg_dir='background', pos_dir='malignant', neg_dir='benign',
                    verbose=False):
     if pos:
+        #阳性，
         roi_out = os.path.join(out_dir, pos_dir)
     else:
+        #阴性
         roi_out = os.path.join(out_dir, neg_dir)
     bkg_out = os.path.join(out_dir, bkg_dir)
     basename = '_'.join([img_id, str(abn)])
@@ -74,26 +105,31 @@ def sample_patches(img, roi_mask, out_dir, img_id, abn, pos, patch_size=256,
     img = add_img_margins(img, patch_size/2)
     roi_mask = add_img_margins(roi_mask, patch_size/2)
     # Get ROI bounding box.
+    #获取边界框
     roi_mask_8u = roi_mask.astype('uint8')
     ver = (cv2.__version__).split('.')
     if int(ver[0]) < 3:
+        #寻找图像中物体的轮廓（病变区域，不规则轮廓）返回向量集
         contours,_ = cv2.findContours(
             roi_mask_8u.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     else:
         _,contours,_ = cv2.findContours(
             roi_mask_8u.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        #计算轮廓面积
     cont_areas = [ cv2.contourArea(cont) for cont in contours ]
-    idx = np.argmax(cont_areas)  # find the largest contour.
+    idx = np.argmax(cont_areas)  # find the largest contour.找到面积最大的轮廓索引值
+    #边界左上角坐标及宽高
+    #boundingRect，用一个最小的矩形，把找到的形状包起来
     rx,ry,rw,rh = cv2.boundingRect(contours[idx])
     if verbose:
+        # 将计算得到的矩以一个字典的形式返回至M
         M = cv2.moments(contours[idx])
         cx = int(M['m10']/M['m00'])
         cy = int(M['m01']/M['m00'])
-        print ("ROI centroid=", (cx,cy))
-        sys.stdout.flush()
+        print ("ROI centroid=", (cx,cy)); sys.stdout.flush()
 
     rng = np.random.RandomState(12345)
-    # Sample abnormality first.
+    # Sample abnormality first.采样异常图片先进行
     sampled_abn = 0
     nb_try = 0
     while sampled_abn < nb_abn:
@@ -101,28 +137,31 @@ def sample_patches(img, roi_mask, out_dir, img_id, abn, pos, patch_size=256,
         y = rng.randint(ry, ry + rh)
         nb_try += 1
         if nb_try >= 1000:
+            # 试验的Nb达到最大值，重叠截止以0.05幅度降低
             print ("Nb of trials reached maximum, decrease overlap cutoff by 0.05")
             sys.stdout.flush()
             pos_cutoff -= .05
             nb_try = 0
             if pos_cutoff <= .0:
+                # 重叠截止值达到了非阳性界限，检查感性区域掩码输入值
                 raise Exception("overlap cutoff becomes non-positive, "
                                 "check roi mask input.")
         # import pdb; pdb.set_trace()
         if overlap_patch_roi((x,y), patch_size, roi_mask, cutoff=pos_cutoff):
-            patch = img[y - patch_size/2:y + patch_size/2, 
+            patch = img[y - patch_size/2:y + patch_size/2,
                         x - patch_size/2:x + patch_size/2]
             patch_img = toimage(
-                patch.astype('int32'), high=patch.max(), low=patch.min(), 
+                patch.astype('int32'), high=patch.max(), low=patch.min(),
                 mode='I')
             # patch = patch.reshape((patch.shape[0], patch.shape[1], 1))
             filename = basename + "_%04d" % (sampled_abn) + ".png"
             fullname = os.path.join(roi_out, filename)
             # import pdb; pdb.set_trace()
             patch_img.save(fullname)
-            sampled_abn += 1
+            sampled_abn += 1 #异常样本数量记录
             nb_try = 0
             if verbose:
+                # 将异常样本的块坐标显示
                 print ("sampled an abn patch at (x,y) center=", (x,y))
                 sys.stdout.flush()
     # Sample background.
@@ -131,30 +170,37 @@ def sample_patches(img, roi_mask, out_dir, img_id, abn, pos, patch_size=256,
         x = rng.randint(patch_size/2, img.shape[1] - patch_size/2)
         y = rng.randint(patch_size/2, img.shape[0] - patch_size/2)
         if not overlap_patch_roi((x,y), patch_size, roi_mask, cutoff=neg_cutoff):
-            patch = img[y - patch_size/2:y + patch_size/2, 
+            patch = img[y - patch_size/2:y + patch_size/2,
                         x - patch_size/2:x + patch_size/2]
             patch_img = toimage(
-                patch.astype('int32'), high=patch.max(), low=patch.min(), 
+                patch.astype('int32'), high=patch.max(), low=patch.min(),
                 mode='I')
             filename = basename + "_%04d" % (sampled_bkg) + ".png"
             fullname = os.path.join(bkg_out, filename)
             patch_img.save(fullname)
             sampled_bkg += 1
             if verbose:
+                # 将样本背景中心块坐标显示
                 print ("sampled a bkg patch at (x,y) center=", (x,y))
                 sys.stdout.flush()
 
-def sample_hard_negatives(img, roi_mask, out_dir, img_id, abn,  
-                          patch_size=256, neg_cutoff=.35, nb_bkg=100, 
+'''
+    作用：难类样本采样
+    输入：
+    输出（返回）：保存样本背景并输出中心坐标
+'''
+def sample_hard_negatives(img, roi_mask, out_dir, img_id, abn,
+                          patch_size=256, neg_cutoff=.35, nb_bkg=100,
                           start_sample_nb=0,
                           bkg_dir='background', verbose=False):
     '''WARNING: the definition of hns may be problematic.
     There has been study showing that the context of an ROI is also useful
     for classification.
     '''
+    # 添加背景目录并命名
     bkg_out = os.path.join(out_dir, bkg_dir)
     basename = '_'.join([img_id, str(abn)])
-
+    # 图像加0边距，掩膜同样处理
     img = add_img_margins(img, patch_size/2)
     roi_mask = add_img_margins(roi_mask, patch_size/2)
     # Get ROI bounding box.
@@ -173,13 +219,13 @@ def sample_hard_negatives(img, roi_mask, out_dir, img_id, abn,
         M = cv2.moments(contours[idx])
         cx = int(M['m10']/M['m00'])
         cy = int(M['m01']/M['m00'])
-        print ("ROI centroid=", (cx,cy))
-        sys.stdout.flush()
+        print ("ROI centroid=", (cx,cy)); sys.stdout.flush()
 
     rng = np.random.RandomState(12345)
-    # Sample hard negative samples.
+    # Sample hard negative samples.难类样本采样
     sampled_bkg = start_sample_nb
     while sampled_bkg < start_sample_nb + nb_bkg:
+        # 扩大感兴趣区域，取不小于patch_size/2,不超过img.shape - patch_size/2的x,y的随机值
         x1,x2 = (rx - patch_size/2, rx + rw + patch_size/2)
         y1,y2 = (ry - patch_size/2, ry + rh + patch_size/2)
         x1 = crop_val(x1, patch_size/2, img.shape[1] - patch_size/2)
@@ -188,11 +234,14 @@ def sample_hard_negatives(img, roi_mask, out_dir, img_id, abn,
         y2 = crop_val(y2, patch_size/2, img.shape[0] - patch_size/2)
         x = rng.randint(x1, x2)
         y = rng.randint(y1, y2)
+        # 如果patch与掩码不重叠则执行
         if not overlap_patch_roi((x,y), patch_size, roi_mask, cutoff=neg_cutoff):
-            patch = img[y - patch_size/2:y + patch_size/2, 
+            # 选取图像中patch
+            patch = img[y - patch_size/2:y + patch_size/2,
                         x - patch_size/2:x + patch_size/2]
+            # patch由数组转为图像，并保存至背景
             patch_img = toimage(
-                patch.astype('int32'), high=patch.max(), low=patch.min(), 
+                patch.astype('int32'), high=patch.max(), low=patch.min(),
                 mode='I')
             filename = basename + "_%04d" % (sampled_bkg) + ".png"
             fullname = os.path.join(bkg_out, filename)
@@ -201,9 +250,12 @@ def sample_hard_negatives(img, roi_mask, out_dir, img_id, abn,
             if verbose:
                 print ("sampled a hns patch at (x,y) center=", (x,y))
                 sys.stdout.flush()
-
-def sample_blob_negatives(img, roi_mask, out_dir, img_id, abn, blob_detector, 
-                          patch_size=256, neg_cutoff=.35, nb_bkg=100, 
+'''
+    作用：阴性斑点样本采样
+    输出：返回斑点数（保存斑点并输出中心坐标）
+'''
+def sample_blob_negatives(img, roi_mask, out_dir, img_id, abn, blob_detector,
+                          patch_size=256, neg_cutoff=.35, nb_bkg=100,
                           start_sample_nb=0,
                           bkg_dir='background', verbose=False):
     bkg_out = os.path.join(out_dir, bkg_dir)
@@ -211,7 +263,7 @@ def sample_blob_negatives(img, roi_mask, out_dir, img_id, abn, blob_detector,
 
     img = add_img_margins(img, patch_size/2)
     roi_mask = add_img_margins(roi_mask, patch_size/2)
-    # Get ROI bounding box.
+    # Get ROI bounding box.获取ROI边界
     roi_mask_8u = roi_mask.astype('uint8')
     ver = (cv2.__version__).split('.')
     if int(ver[0]) < 3:
@@ -227,10 +279,10 @@ def sample_blob_negatives(img, roi_mask, out_dir, img_id, abn, blob_detector,
         M = cv2.moments(contours[idx])
         cx = int(M['m10']/M['m00'])
         cy = int(M['m01']/M['m00'])
-        print ("ROI centroid=", (cx,cy))
-        sys.stdout.flush()
+        print ("ROI centroid=", (cx,cy)); sys.stdout.flush()
 
-    # Sample blob negative samples.
+    # Sample blob negative samples.阴性斑点样本采样
+    # 采取特征点？
     key_pts = blob_detector.detect((img/img.max()*255).astype('uint8'))
     rng = np.random.RandomState(12345)
     key_pts = rng.permutation(key_pts)
@@ -240,10 +292,10 @@ def sample_blob_negatives(img, roi_mask, out_dir, img_id, abn, blob_detector,
             break
         x,y = int(kp.pt[0]), int(kp.pt[1])
         if not overlap_patch_roi((x,y), patch_size, roi_mask, cutoff=neg_cutoff):
-            patch = img[y - patch_size/2:y + patch_size/2, 
+            patch = img[y - patch_size/2:y + patch_size/2,
                         x - patch_size/2:x + patch_size/2]
             patch_img = toimage(
-                patch.astype('int32'), high=patch.max(), low=patch.min(), 
+                patch.astype('int32'), high=patch.max(), low=patch.min(),
                 mode='I')
             filename = basename + "_%04d" % (start_sample_nb + sampled_bkg) + ".png"
             fullname = os.path.join(bkg_out, filename)
@@ -257,11 +309,11 @@ def sample_blob_negatives(img, roi_mask, out_dir, img_id, abn, blob_detector,
 #### End of function definition ####
 
 
-def run(roi_mask_path_file, roi_mask_dir, pat_train_list_file, full_img_dir, 
+def run(roi_mask_path_file, roi_mask_dir, pat_train_list_file, full_img_dir,
         train_out_dir, val_out_dir,
         target_height=4096, patch_size=256, nb_bkg=30, nb_abn=30, nb_hns=15,
         pos_cutoff=.75, neg_cutoff=.35, val_size=.1,
-        bkg_dir='background', pos_dir='malignant', neg_dir='benign', 
+        bkg_dir='background', pos_dir='malignant', neg_dir='benign',
         itype='Mass', verbose=True):
 
     # Print info for book-keeping.
@@ -322,8 +374,8 @@ def run(roi_mask_path_file, roi_mask_dir, pat_train_list_file, full_img_dir,
             try:
                 full_img = read_resize_img(full_fn, target_height=target_height)
                 img_id = '_'.join([pat, side, view])
-                print ("ID:%s, read image of size=%s" % (img_id, full_img.shape),)
-                full_img, bbox = imprep.segment_breast(full_img)
+                print ("ID:%s, read image of size=%s" % (img_id, full_img.shape),
+                full_img, bbox = imprep.segment_breast(full_img))
                 print ("size after segmentation=%s" % (str(full_img.shape)))
                 sys.stdout.flush()
                 # Read mask image(s).
@@ -337,22 +389,22 @@ def run(roi_mask_path_file, roi_mask_dir, pat_train_list_file, full_img_dir,
                 bkg_sampled = False
                 for abn, path in zip(abn_num, pathology):
                     mask_fn = const_filename(pat, side, view, roi_mask_dir, itype, abn)
-                    mask_img = read_resize_img(mask_fn, target_height=target_height, 
+                    mask_img = read_resize_img(mask_fn, target_height=target_height,
                                                gs_255=True)
                     mask_img = crop_img(mask_img, bbox)
                     # sample using mask and full image.
                     nb_hns_ = nb_hns if not bkg_sampled else 0
                     if nb_hns_ > 0:
                         hns_sampled = sample_blob_negatives(
-                            full_img, mask_img, out_dir, img_id, 
-                            abn, blob_detector, patch_size, neg_cutoff, 
+                            full_img, mask_img, out_dir, img_id,
+                            abn, blob_detector, patch_size, neg_cutoff,
                             nb_hns_, 0, bkg_dir, verbose)
                     else:
                         hns_sampled = 0
                     pos = path.startswith('MALIGNANT')
                     nb_bkg_ = nb_bkg - hns_sampled if not bkg_sampled else 0
-                    sample_patches(full_img, mask_img, out_dir, img_id, abn, pos, 
-                                   patch_size, pos_cutoff, neg_cutoff, 
+                    sample_patches(full_img, mask_img, out_dir, img_id, abn, pos,
+                                   patch_size, pos_cutoff, neg_cutoff,
                                    nb_bkg_, nb_abn, hns_sampled,
                                    bkg_dir, pos_dir, neg_dir, verbose)
                     bkg_sampled = True
@@ -371,7 +423,7 @@ def run(roi_mask_path_file, roi_mask_dir, pat_train_list_file, full_img_dir,
         print ("Sampling for val set")
         sys.stdout.flush()
         do_sampling(val_df, val_out_dir)
-        print ("Done.")
+        print( "Done.")
 
 
 if __name__ == '__main__':
